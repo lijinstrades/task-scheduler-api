@@ -240,11 +240,31 @@ def database_uri(do: DigitalOcean, database_id: str) -> str:
     """Build the private Mongo URI from the cluster's API connection details."""
     cluster = do.request("GET", f"/databases/{database_id}").get("database", {})
     connection = cluster.get("private_connection") or {}
-    missing = [field for field in ("host", "user", "password") if not connection.get(field)]
+    username = connection.get("user")
+    password = connection.get("password")
+    if username and not password:
+        user = do.request(
+            "GET", f"/databases/{database_id}/users/{quote(username, safe='')}"
+        ).get("user", {})
+        password = user.get("password")
+
+    missing = [
+        field
+        for field, value in (
+            ("host", connection.get("host")),
+            ("user", username),
+            ("password", password),
+        )
+        if not value
+    ]
     if missing:
         detail = ", ".join(missing)
         if "password" in missing:
-            detail += "; ensure the DigitalOcean token has database:view_credentials permission"
+            detail += (
+                "; the cluster and database-user API responses both omitted the password. "
+                "Confirm the DIGITALOCEAN_ACCESS_TOKEN GitHub secret contains the full-scoped token "
+                "with database:view_credentials permission"
+            )
         raise RuntimeError(
             f"DigitalOcean did not return required private MongoDB connection field(s): {detail}"
         )
@@ -260,7 +280,7 @@ def database_uri(do: DigitalOcean, database_id: str) -> str:
     return urlunsplit(
         (
             "mongodb",
-            f"{quote(connection['user'], safe='')}:{quote(connection['password'], safe='')}@{host}",
+            f"{quote(username, safe='')}:{quote(password, safe='')}@{host}",
             "/job_api",
             query,
             "",

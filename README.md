@@ -265,7 +265,7 @@ Before the first deployment, add these GitHub repository Actions secrets:
 
 | Secret | Purpose |
 |---|---|
-| `DIGITALOCEAN_ACCESS_TOKEN` | DigitalOcean API token that can manage VPCs, databases, Droplets, firewalls, tags, and App Platform apps, and has `database:view_credentials` permission. The deploy script reads the private MongoDB host and credentials from the cluster API response. |
+| `DIGITALOCEAN_ACCESS_TOKEN` | DigitalOcean API token that can manage VPCs, databases, Droplets, firewalls, tags, and App Platform apps, and has `database:view_credentials` permission. The deploy script reads the private MongoDB endpoint from the cluster response and gets the password from the database user endpoint if it is absent there. |
 | `RABBITMQ_PASSWORD` | Password for the RabbitMQ application user; use at least 24 characters and keep it stable after the first provision |
 
 Optional GitHub Actions variables control independent App Platform scaling:
