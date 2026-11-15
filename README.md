@@ -265,7 +265,7 @@ Before the first deployment, add these GitHub repository Actions secrets:
 
 | Secret | Purpose |
 |---|---|
-| `DIGITALOCEAN_ACCESS_TOKEN` | DigitalOcean API token that can manage VPCs, databases, Droplets, firewalls, tags, and App Platform apps |
+| `DIGITALOCEAN_ACCESS_TOKEN` | DigitalOcean API token that can manage VPCs, databases, Droplets, firewalls, tags, and App Platform apps, and has `database:view_credentials` permission |
 | `RABBITMQ_PASSWORD` | Password for the RabbitMQ application user; use at least 24 characters and keep it stable after the first provision |
 
 Optional GitHub Actions variables control independent App Platform scaling:

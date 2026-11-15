@@ -249,10 +249,18 @@ def database_uri(database_id: str) -> str:
             "URI",
             "--no-header",
         ],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    if result.returncode:
+        message = result.stderr.strip() or result.stdout.strip() or "no error details returned"
+        token = os.environ.get("DIGITALOCEAN_ACCESS_TOKEN", "")
+        if token:
+            message = message.replace(token, "[REDACTED]")
+        if "permission" in message.lower() or "scope" in message.lower():
+            message += " (the token needs database:view_credentials permission)"
+        raise RuntimeError(f"Could not retrieve the private MongoDB connection URI: {message}")
     uri = result.stdout.strip()
     if not uri.startswith(("mongodb://", "mongodb+srv://")):
         raise RuntimeError("DigitalOcean did not return a MongoDB connection URI")
