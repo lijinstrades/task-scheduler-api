@@ -241,7 +241,7 @@ def database_uri(do: DigitalOcean, database_id: str) -> str:
     cluster = do.request("GET", f"/databases/{database_id}").get("database", {})
     connection = cluster.get("private_connection") or {}
     username = connection.get("user")
-    password = connection.get("password")
+    password = os.environ.get("MONGODB_PASSWORD") or connection.get("password")
     if username and not password:
         user = do.request("GET", f"/databases/{database_id}/users/{quote(username, safe='')}").get(
             "user", {}

@@ -265,8 +265,9 @@ Before the first deployment, add these GitHub repository Actions secrets:
 
 | Secret | Purpose |
 |---|---|
-| `DIGITALOCEAN_ACCESS_TOKEN` | DigitalOcean API token that can manage VPCs, databases, Droplets, firewalls, tags, and App Platform apps, and has `database:view_credentials` permission. The deploy script reads the private MongoDB endpoint from the cluster response and gets the password from the database user endpoint if it is absent there. |
+| `DIGITALOCEAN_ACCESS_TOKEN` | DigitalOcean API token that can manage VPCs, databases, Droplets, firewalls, tags, and App Platform apps. If `MONGODB_PASSWORD` is not set, it also needs `database:view_credentials` permission. |
 | `RABBITMQ_PASSWORD` | Password for the RabbitMQ application user; use at least 24 characters and keep it stable after the first provision |
+| `MONGODB_PASSWORD` | Password for the MongoDB cluster user shown in its connection details (usually `doadmin`). Optional when the DigitalOcean token can view database credentials. |
 
 Optional GitHub Actions variables control independent App Platform scaling:
 
@@ -274,6 +275,12 @@ Optional GitHub Actions variables control independent App Platform scaling:
 |---|---:|---|
 | `DO_API_INSTANCES` | `1` | Number of API instances |
 | `DO_WORKER_INSTANCES` | `1` | Number of worker instances |
+
+If setting `MONGODB_PASSWORD`, use the same password as the MongoDB user in
+DigitalOcean. To retrieve it, open the cluster's **Overview → Connection
+Details** and copy the password; if it is no longer visible, reset the user's
+password under **Users & Databases** and save the newly shown password as the
+GitHub Actions repository secret `MONGODB_PASSWORD`.
 
 Pushes to `main` provision missing resources, update the app spec, and wait for
 the deployment after all tests pass. `workflow_dispatch` does the same when

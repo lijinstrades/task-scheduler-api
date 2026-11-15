@@ -75,6 +75,7 @@ jobs:
         env:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+          MONGODB_PASSWORD: ${{ secrets.MONGODB_PASSWORD }}
           DO_API_INSTANCES: ${{ vars.DO_API_INSTANCES || '1' }}
           DO_WORKER_INSTANCES: ${{ vars.DO_WORKER_INSTANCES || '1' }}
         run: python .github/scripts/deploy_digitalocean.py
