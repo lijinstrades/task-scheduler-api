@@ -62,8 +62,10 @@ class DigitalOcean:
         next_path: str | None = f"{path}?per_page=200"
         while next_path:
             response = self.request("GET", next_path)
-            result.extend(response.get(key, []))
-            next_path = response.get("links", {}).get("pages", {}).get("next")
+            result.extend(response.get(key) or [])
+            links = response.get("links") or {}
+            pages = links.get("pages") or {}
+            next_path = pages.get("next")
             if next_path and next_path.startswith(API):
                 next_path = next_path[len(API) :]
         return result
