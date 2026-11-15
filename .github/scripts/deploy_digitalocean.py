@@ -240,11 +240,7 @@ def database_uri(do: DigitalOcean, database_id: str) -> str:
     """Build the private Mongo URI from the cluster's API connection details."""
     cluster = do.request("GET", f"/databases/{database_id}").get("database", {})
     connection = cluster.get("private_connection") or {}
-    missing = [
-        field
-        for field in ("host", "user", "password")
-        if not connection.get(field)
-    ]
+    missing = [field for field in ("host", "user", "password") if not connection.get(field)]
     if missing:
         detail = ", ".join(missing)
         if "password" in missing:
