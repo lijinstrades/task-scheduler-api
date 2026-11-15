@@ -262,7 +262,8 @@ def database_uri(do: DigitalOcean, database_id: str) -> str:
         if "password" in missing:
             detail += (
                 "; the cluster and database-user API responses both omitted the password. "
-                "Confirm the DIGITALOCEAN_ACCESS_TOKEN GitHub secret contains the full-scoped token "
+                "Confirm the DIGITALOCEAN_ACCESS_TOKEN GitHub secret contains "
+                "the full-scoped token "
                 "with database:view_credentials permission"
             )
         raise RuntimeError(
