@@ -122,7 +122,7 @@ last error, result, and completed attempt history. A running attempt increments
 the counter immediately; its history entry is appended when finalized.
 
 - `max_retries = N` allows at most `N + 1` claimed attempts.
-- Retry delay is full jitter: `random(0, min(cap, base * 2^(attempt - 1)))`.
+- Retry delay uses jitter with a minimum base delay: `random(base, min(cap, base * 2^(attempt - 1)))`.
 - Handler execution includes process-startup time in the attempt deadline.
 - The child process is terminated on timeout. A parent-death watcher also
   stops the child if its worker exits, for handlers that permit Python threads

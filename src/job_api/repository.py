@@ -33,7 +33,8 @@ def utcnow() -> datetime:
 
 def retry_delay(attempt: int, settings: Settings) -> float:
     return random.uniform(
-        0, min(settings.backoff_cap_seconds, settings.backoff_base_seconds * 2 ** (attempt - 1))
+        settings.backoff_base_seconds,
+        min(settings.backoff_cap_seconds, settings.backoff_base_seconds * 2 ** (attempt - 1)),
     )
 
 
