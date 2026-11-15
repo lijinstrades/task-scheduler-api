@@ -11,7 +11,7 @@ import tempfile
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 API = "https://api.digitalocean.com/v2"
@@ -236,7 +236,7 @@ def rabbit_private_ip(do: DigitalOcean, droplet: dict) -> str:
     return private[0]
 
 
-def database_uri(database_id: str) -> str:
+def database_connection_field(database_id: str, field: str) -> str:
     result = subprocess.run(
         [
             "doctl",
@@ -246,7 +246,7 @@ def database_uri(database_id: str) -> str:
             "--private",
             "--show",
             "--format",
-            "URI",
+            field,
             "--no-header",
         ],
         check=False,
@@ -260,12 +260,26 @@ def database_uri(database_id: str) -> str:
             message = message.replace(token, "[REDACTED]")
         if "permission" in message.lower() or "scope" in message.lower():
             message += " (the token needs database:view_credentials permission)"
-        raise RuntimeError(f"Could not retrieve the private MongoDB connection URI: {message}")
-    uri = result.stdout.strip()
+        raise RuntimeError(f"Could not retrieve MongoDB connection field {field}: {message}")
+    return result.stdout.strip()
+
+
+def database_uri(database_id: str) -> str:
+    uri = database_connection_field(database_id, "URI")
     if not uri.startswith(("mongodb://", "mongodb+srv://")):
         raise RuntimeError("DigitalOcean did not return a MongoDB connection URI")
     parts = urlsplit(uri)
-    return urlunsplit((parts.scheme, parts.netloc, "/job_api", parts.query, parts.fragment))
+    host = parts.hostname
+    username = parts.username
+    password = database_connection_field(database_id, "Password")
+    if not host or not username or not password:
+        raise RuntimeError("DigitalOcean returned incomplete MongoDB connection credentials")
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    netloc = f"{quote(unquote(username), safe='')}:{quote(password, safe='')}@{host}"
+    return urlunsplit((parts.scheme, netloc, "/job_api", parts.query, parts.fragment))
 
 
 def app_spec(vpc_id: str, mongo_uri: str, rabbit_ip: str, rabbit_password: str) -> dict:
