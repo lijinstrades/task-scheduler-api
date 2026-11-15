@@ -176,7 +176,7 @@ def ensure_rabbit_firewall(do: DigitalOcean) -> None:
     outbound = [
         {"protocol": "tcp", "ports": "1-65535", "destinations": {"addresses": ["0.0.0.0/0"]}},
         {"protocol": "udp", "ports": "1-65535", "destinations": {"addresses": ["0.0.0.0/0"]}},
-        {"protocol": "icmp", "ports": "1", "destinations": {"addresses": ["0.0.0.0/0"]}},
+        {"protocol": "icmp", "ports": "0", "destinations": {"addresses": ["0.0.0.0/0"]}},
     ]
     matches = [
         firewall
