@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -351,6 +352,33 @@ def redact_app_secrets(message: str, spec: dict) -> str:
     return message
 
 
+def failed_api_logs(details: str, spec: dict) -> str:
+    app_match = re.search(r"app \(([0-9a-f-]{36})\)", details)
+    deployment_match = re.search(r"deployment ID: ([0-9a-f-]{36})", details)
+    if not app_match or not deployment_match:
+        return ""
+    logs = subprocess.run(
+        [
+            "doctl",
+            "apps",
+            "logs",
+            app_match.group(1),
+            "api",
+            "--type",
+            "run",
+            "--deployment",
+            deployment_match.group(1),
+            "--tail",
+            "100",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    output = logs.stdout.strip() or logs.stderr.strip()
+    return redact_app_secrets(output, spec)
+
+
 def main() -> None:
     token = os.environ.get("DIGITALOCEAN_ACCESS_TOKEN", "")
     rabbit_password = os.environ.get("RABBITMQ_PASSWORD", "")
@@ -409,6 +437,9 @@ def main() -> None:
         )
     if result.returncode:
         details = result.stderr.strip() or result.stdout.strip() or "no error details returned"
+        api_logs = failed_api_logs(details, spec)
+        if api_logs:
+            details += "\nAPI runtime logs:\n" + api_logs
         raise RuntimeError("doctl app create/update failed: " + redact_app_secrets(details, spec))
     print(result.stdout.strip())
     print("DigitalOcean resources are ready and the App Platform deployment completed.")
