@@ -243,9 +243,9 @@ def database_uri(do: DigitalOcean, database_id: str) -> str:
     username = connection.get("user")
     password = connection.get("password")
     if username and not password:
-        user = do.request(
-            "GET", f"/databases/{database_id}/users/{quote(username, safe='')}"
-        ).get("user", {})
+        user = do.request("GET", f"/databases/{database_id}/users/{quote(username, safe='')}").get(
+            "user", {}
+        )
         password = user.get("password")
 
     missing = [
