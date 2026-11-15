@@ -242,50 +242,50 @@ without shutting down shared services.
 
 GitHub Actions starts MongoDB/RabbitMQ services and runs lint, formatting, and
 the full suite on pull requests and pushes to `main`. A successful push to
-`main` then deploys the linked DigitalOcean App Platform app. Manual workflow
-runs also deploy after the test job succeeds.
+`main` then provisions or updates the DigitalOcean resources and deploys the
+application. Manual workflow runs also provision/update and deploy after tests
+succeed.
 
 ## DigitalOcean deployment
 
-The `deploy` job in `.github/workflows/tests.yml` asks App Platform to fetch the
-latest source from the app's configured GitHub branch and deploy it. It expects
-an existing App Platform app and does not create DigitalOcean infrastructure.
-Configure the app once in DigitalOcean:
+The deployment script `.github/scripts/deploy_digitalocean.py` creates or
+reuses these resources in Singapore (`sgp1` for Droplets/databases and `sgp` for
+App Platform):
 
-1. Create an App Platform app from this GitHub repository, using the `main`
-   branch and the repository root as the source directory.
-2. Add a **web service** with build command `python -m pip install .`, run
-   command `python -m uvicorn job_api.api:app --host 0.0.0.0 --port 8080`,
-   HTTP port `8080`, and health check path `/health`.
-3. Add a **worker** component from the same repository root with build command
-   `python -m pip install .` and run command `python -m job_api.pool`.
-4. Set the following environment variables for both components. Mark passwords
-   and URLs containing credentials as encrypted secrets in App Platform.
+- A VPC (`10.70.0.0/20`) for private service traffic.
+- A DigitalOcean Managed MongoDB 8 cluster (`db-s-1vcpu-1gb`, one node).
+- RabbitMQ from Ubuntu 24.04 packages on a Droplet (`s-1vcpu-2gb`). It stores
+  broker data on the Droplet's persistent disk. RabbitMQ has one node, so it
+  is a single point of failure.
+- An App Platform app with separate API and worker components, each starting
+  at one `apps-s-1vcpu-1gb` instance. The API is exposed over HTTPS; worker,
+  MongoDB, and RabbitMQ traffic uses the private VPC network.
 
-   | Variable | Value |
-   |---|---|
-   | `MONGO_URI` | Connection URI for a reachable MongoDB deployment |
-   | `MONGO_DATABASE` | Database name, for example `job_api` |
-   | `RABBITMQ_URL` | AMQP URI for a reachable RabbitMQ virtual host |
-   | `RABBITMQ_MANAGEMENT_URL` | HTTP(S) management API base URL, with no trailing `/api` |
-   | `RABBITMQ_MANAGEMENT_USER` | RabbitMQ management username |
-   | `RABBITMQ_MANAGEMENT_PASSWORD` | RabbitMQ management password |
-   | `WORKER_COUNT` | Worker process count; defaults to `3` |
-   | `ENABLE_TEST_HANDLERS` | `false` |
+Before the first deployment, add these GitHub repository Actions secrets:
 
-   MongoDB and RabbitMQ must be provisioned separately and allow connections
-   from the App Platform components. The local Compose services are not
-   deployed by this workflow. Use TLS-enabled database and broker endpoints
-   where available. Set the web service's HTTP port to `8080` to match its run
-   command.
-5. In GitHub repository settings, add Actions secrets
-   `DIGITALOCEAN_ACCESS_TOKEN` (a DigitalOcean API token with permission to
-   deploy apps) and `DIGITALOCEAN_APP_ID` (the ID of the App Platform app).
+| Secret | Purpose |
+|---|---|
+| `DIGITALOCEAN_ACCESS_TOKEN` | DigitalOcean API token that can manage VPCs, databases, Droplets, firewalls, tags, and App Platform apps |
+| `RABBITMQ_PASSWORD` | Password for the RabbitMQ application user; use at least 24 characters and keep it stable after the first provision |
 
-Pull requests run tests only. A push to `main` deploys only after tests succeed;
-`workflow_dispatch` runs tests and then deploys the app's configured source
-branch. The App Platform app's GitHub source must therefore track `main` for
-manual runs to deploy the tested `main` revision. App Platform builds the two
-components from the same Python project; the worker is a long-running process,
-not an HTTP service. The API health check verifies MongoDB readiness and does
-not verify worker or RabbitMQ health.
+Optional GitHub Actions variables control independent App Platform scaling:
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `DO_API_INSTANCES` | `1` | Number of API instances |
+| `DO_WORKER_INSTANCES` | `1` | Number of worker instances |
+
+Pushes to `main` provision missing resources, update the app spec, and wait for
+the deployment after all tests pass. `workflow_dispatch` does the same when
+started from `main`. Pull requests only run tests. The script uses stable
+resource names and does not delete resources; deleting this infrastructure
+must be done deliberately from DigitalOcean. Resource creation incurs ongoing
+DigitalOcean charges. The selected one-node MongoDB and RabbitMQ configurations
+do not provide full high availability for both data services.
+
+RabbitMQ's management and AMQP ports are restricted to the VPC. The deployment
+uses App Platform's VPC integration to reach the broker and MongoDB privately.
+The MongoDB cluster firewall allows the project VPC CIDR. The API health check
+checks MongoDB readiness; it does not prove RabbitMQ or worker health. The API
+also has no authentication, so add an authentication layer before exposing it
+to untrusted callers.

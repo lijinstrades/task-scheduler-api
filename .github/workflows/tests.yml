@@ -55,16 +55,26 @@ jobs:
           if-no-files-found: ignore
 
   deploy:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
+    concurrency:
+      group: digitalocean-task-scheduler-api
+      cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-      - name: Deploy latest main source to App Platform
+      - name: Provision DigitalOcean infrastructure and deploy the app
         env:
-          APP_ID: ${{ secrets.DIGITALOCEAN_APP_ID }}
-        run: doctl apps create-deployment "$APP_ID" --update-sources --format ID,Status
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+          DO_API_INSTANCES: ${{ vars.DO_API_INSTANCES || '1' }}
+          DO_WORKER_INSTANCES: ${{ vars.DO_WORKER_INSTANCES || '1' }}
+        run: python .github/scripts/deploy_digitalocean.py
