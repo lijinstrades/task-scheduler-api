@@ -11,7 +11,7 @@ import tempfile
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, unquote, urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 API = "https://api.digitalocean.com/v2"
@@ -236,50 +236,40 @@ def rabbit_private_ip(do: DigitalOcean, droplet: dict) -> str:
     return private[0]
 
 
-def database_connection_field(database_id: str, field: str) -> str:
-    result = subprocess.run(
-        [
-            "doctl",
-            "databases",
-            "connection",
-            database_id,
-            "--private",
-            "--show",
-            "--format",
-            field,
-            "--no-header",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode:
-        message = result.stderr.strip() or result.stdout.strip() or "no error details returned"
-        token = os.environ.get("DIGITALOCEAN_ACCESS_TOKEN", "")
-        if token:
-            message = message.replace(token, "[REDACTED]")
-        if "permission" in message.lower() or "scope" in message.lower():
-            message += " (the token needs database:view_credentials permission)"
-        raise RuntimeError(f"Could not retrieve MongoDB connection field {field}: {message}")
-    return result.stdout.strip()
+def database_uri(do: DigitalOcean, database_id: str) -> str:
+    """Build the private Mongo URI from the cluster's API connection details."""
+    cluster = do.request("GET", f"/databases/{database_id}").get("database", {})
+    connection = cluster.get("private_connection") or {}
+    missing = [
+        field
+        for field in ("host", "user", "password")
+        if not connection.get(field)
+    ]
+    if missing:
+        detail = ", ".join(missing)
+        if "password" in missing:
+            detail += "; ensure the DigitalOcean token has database:view_credentials permission"
+        raise RuntimeError(
+            f"DigitalOcean did not return required private MongoDB connection field(s): {detail}"
+        )
 
-
-def database_uri(database_id: str) -> str:
-    uri = database_connection_field(database_id, "URI")
-    if not uri.startswith(("mongodb://", "mongodb+srv://")):
-        raise RuntimeError("DigitalOcean did not return a MongoDB connection URI")
-    parts = urlsplit(uri)
-    host = parts.hostname
-    username = parts.username
-    password = database_connection_field(database_id, "Password")
-    if not host or not username or not password:
-        raise RuntimeError("DigitalOcean returned incomplete MongoDB connection credentials")
+    host = connection["host"]
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"
-    if parts.port:
-        host = f"{host}:{parts.port}"
-    netloc = f"{quote(unquote(username), safe='')}:{quote(password, safe='')}@{host}"
-    return urlunsplit((parts.scheme, netloc, "/job_api", parts.query, parts.fragment))
+    port = connection.get("port")
+    if port:
+        host = f"{host}:{port}"
+    uri_parts = urlsplit(connection.get("uri", ""))
+    query = uri_parts.query or ("tls=true" if connection.get("ssl") else "")
+    return urlunsplit(
+        (
+            "mongodb",
+            f"{quote(connection['user'], safe='')}:{quote(connection['password'], safe='')}@{host}",
+            "/job_api",
+            query,
+            "",
+        )
+    )
 
 
 def app_spec(vpc_id: str, mongo_uri: str, rabbit_ip: str, rabbit_password: str) -> dict:
@@ -430,7 +420,7 @@ def main() -> None:
     database = wait_until("MongoDB cluster readiness", ready_database)
     ensure_database_firewall(do, database["id"])
     private_ip = rabbit_private_ip(do, droplet)
-    mongo_uri = database_uri(database["id"])
+    mongo_uri = database_uri(do, database["id"])
     spec = app_spec(vpc["id"], mongo_uri, private_ip, rabbit_password)
     with tempfile.TemporaryDirectory() as temporary_directory:
         spec_path = Path(temporary_directory) / "app-spec.json"
