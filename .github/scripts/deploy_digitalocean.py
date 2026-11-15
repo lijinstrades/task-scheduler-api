@@ -342,6 +342,15 @@ def app_spec(vpc_id: str, mongo_uri: str, rabbit_ip: str, rabbit_password: str) 
     }
 
 
+def redact_app_secrets(message: str, spec: dict) -> str:
+    for component in [*spec.get("services", []), *spec.get("workers", [])]:
+        for env in component.get("envs", []):
+            value = env.get("value")
+            if env.get("type") == "SECRET" and value:
+                message = message.replace(value, "[REDACTED]")
+    return message
+
+
 def main() -> None:
     token = os.environ.get("DIGITALOCEAN_ACCESS_TOKEN", "")
     rabbit_password = os.environ.get("RABBITMQ_PASSWORD", "")
@@ -394,10 +403,13 @@ def main() -> None:
                 "--format",
                 "ID,DefaultIngress",
             ],
-            check=True,
+            check=False,
             capture_output=True,
             text=True,
         )
+    if result.returncode:
+        details = result.stderr.strip() or result.stdout.strip() or "no error details returned"
+        raise RuntimeError("doctl app create/update failed: " + redact_app_secrets(details, spec))
     print(result.stdout.strip())
     print("DigitalOcean resources are ready and the App Platform deployment completed.")
 
