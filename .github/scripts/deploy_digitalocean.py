@@ -357,26 +357,24 @@ def failed_api_logs(details: str, spec: dict) -> str:
     deployment_match = re.search(r"deployment ID: ([0-9a-f-]{36})", details)
     if not app_match or not deployment_match:
         return ""
-    logs = subprocess.run(
-        [
-            "doctl",
-            "apps",
-            "logs",
-            app_match.group(1),
-            "api",
-            "--type",
-            "run",
-            "--deployment",
-            deployment_match.group(1),
-            "--tail",
-            "100",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    output = logs.stdout.strip() or logs.stderr.strip()
-    return redact_app_secrets(output, spec)
+    app_id, deployment_id = app_match.group(1), deployment_match.group(1)
+    attempts = [
+        ["--type", "run_restarted", "--tail", "100"],
+        ["--type", "run", "--deployment", deployment_id, "--tail", "100"],
+        ["--type", "deploy", "--deployment", deployment_id, "--tail", "100"],
+    ]
+    outputs = []
+    for arguments in attempts:
+        logs = subprocess.run(
+            ["doctl", "apps", "logs", app_id, "api", *arguments],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        output = logs.stdout.strip() or logs.stderr.strip()
+        if output:
+            outputs.append(f"$ doctl apps logs api {' '.join(arguments)}\n{output}")
+    return redact_app_secrets("\n\n".join(outputs), spec)
 
 
 def main() -> None:
