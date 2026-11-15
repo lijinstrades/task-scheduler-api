@@ -353,10 +353,9 @@ def main() -> None:
 
     do = DigitalOcean(token)
     vpc = ensure_vpc(do)
-    database = ensure_database(do, vpc["id"])
-    ensure_database_firewall(do, database["id"])
     ensure_tag(do, APP_NAME)
     ensure_tag(do, RABBIT_TAG)
+    database = ensure_database(do, vpc["id"])
     ensure_rabbit_firewall(do)
     droplet = ensure_rabbit_droplet(do, vpc["id"], rabbit_password)
 
@@ -370,6 +369,7 @@ def main() -> None:
 
     droplet = wait_until("RabbitMQ Droplet activation", active_droplet)
     database = wait_until("MongoDB cluster readiness", ready_database)
+    ensure_database_firewall(do, database["id"])
     private_ip = rabbit_private_ip(do, droplet)
     mongo_uri = database_uri(database["id"])
     spec = app_spec(vpc["id"], mongo_uri, private_ip, rabbit_password)
