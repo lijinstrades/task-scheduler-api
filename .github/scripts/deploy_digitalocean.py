@@ -270,17 +270,22 @@ def database_uri(do: DigitalOcean, database_id: str) -> str:
             f"DigitalOcean did not return required private MongoDB connection field(s): {detail}"
         )
 
-    host = connection["host"]
+    uri_parts = urlsplit(connection.get("uri", ""))
+    scheme = uri_parts.scheme
+    if scheme not in {"mongodb", "mongodb+srv"}:
+        scheme = "mongodb"
+    host = uri_parts.hostname or connection["host"]
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"
-    port = connection.get("port")
+    port = uri_parts.port
+    if port is None and scheme == "mongodb":
+        port = connection.get("port")
     if port:
         host = f"{host}:{port}"
-    uri_parts = urlsplit(connection.get("uri", ""))
     query = uri_parts.query or ("tls=true" if connection.get("ssl") else "")
     return urlunsplit(
         (
-            "mongodb",
+            scheme,
             f"{quote(username, safe='')}:{quote(password, safe='')}@{host}",
             "/job_api",
             query,
