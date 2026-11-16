@@ -293,8 +293,8 @@ do not provide full high availability for both data services.
 RabbitMQ's management and AMQP ports are restricted to the VPC. The deployment
 uses App Platform's VPC integration to reach the broker and MongoDB privately.
 The deployment preserves MongoDB's private SRV connection string so the driver
-can discover the cluster's node addresses. The MongoDB cluster firewall allows
-the project VPC CIDR. The API health check
-checks MongoDB readiness; it does not prove RabbitMQ or worker health. The API
+can discover the cluster's node addresses. The MongoDB cluster firewall trusts
+the project VPC CIDR and the App Platform app's private egress. The API health
+check checks MongoDB readiness; it does not prove RabbitMQ or worker health. The API
 also has no authentication, so add an authentication layer before exposing it
 to untrusted callers.

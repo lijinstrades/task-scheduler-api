@@ -130,16 +130,29 @@ def ensure_database(do: DigitalOcean, vpc_id: str) -> dict:
     )["database"]
 
 
-def ensure_database_firewall(do: DigitalOcean, database_id: str) -> None:
+def app_id(do: DigitalOcean) -> str | None:
+    for app in do.collection("/apps", "apps"):
+        if app.get("spec", {}).get("name") == APP_NAME:
+            return app["id"]
+    return None
+
+
+def ensure_database_firewall(do: DigitalOcean, database_id: str, app_uuid: str | None) -> None:
     response = do.request("GET", f"/databases/{database_id}/firewall")
-    vpc_rule = {"type": "ip_addr", "value": VPC_CIDR, "description": f"{APP_NAME} VPC"}
+    desired_rules = [
+        {"type": "ip_addr", "value": VPC_CIDR, "description": f"{APP_NAME} VPC"}
+    ]
+    if app_uuid:
+        desired_rules.append(
+            {"type": "app", "value": app_uuid, "description": f"{APP_NAME} App Platform app"}
+        )
     rules = response.get("rules", [])
     managed_rules = [
         {key: rule[key] for key in ("type", "value", "description") if key in rule}
         for rule in rules
     ]
-    if managed_rules != [vpc_rule]:
-        do.request("PUT", f"/databases/{database_id}/firewall", {"rules": [vpc_rule]})
+    if managed_rules != desired_rules:
+        do.request("PUT", f"/databases/{database_id}/firewall", {"rules": desired_rules})
 
 
 def rabbit_user_data(password: str) -> str:
@@ -430,7 +443,7 @@ def main() -> None:
 
     droplet = wait_until("RabbitMQ Droplet activation", active_droplet)
     database = wait_until("MongoDB cluster readiness", ready_database)
-    ensure_database_firewall(do, database["id"])
+    ensure_database_firewall(do, database["id"], app_id(do))
     private_ip = rabbit_private_ip(do, droplet)
     mongo_uri = database_uri(do, database["id"])
     spec = app_spec(vpc["id"], mongo_uri, private_ip, rabbit_password)
