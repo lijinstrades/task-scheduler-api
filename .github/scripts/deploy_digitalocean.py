@@ -139,9 +139,7 @@ def app_id(do: DigitalOcean) -> str | None:
 
 def ensure_database_firewall(do: DigitalOcean, database_id: str, app_uuid: str | None) -> None:
     response = do.request("GET", f"/databases/{database_id}/firewall")
-    desired_rules = [
-        {"type": "ip_addr", "value": VPC_CIDR, "description": f"{APP_NAME} VPC"}
-    ]
+    desired_rules = [{"type": "ip_addr", "value": VPC_CIDR, "description": f"{APP_NAME} VPC"}]
     if app_uuid:
         desired_rules.append(
             {"type": "app", "value": app_uuid, "description": f"{APP_NAME} App Platform app"}
